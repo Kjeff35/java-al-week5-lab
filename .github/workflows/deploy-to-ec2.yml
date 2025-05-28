@@ -5,10 +5,10 @@ on:
     branches: [ deploy ]
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#  AWS_REGION: ${{ secrets.AWS_REGION }}
+#  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
   EC2_KEY_PAIR_NAME: myKeyPair
   STACK_NAME: my-app-stack
   DOCKER_IMAGE: my-app
@@ -24,9 +24,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy CloudFormation stack
         run: |
@@ -57,7 +57,7 @@ jobs:
 
       - name: Install SSH private key
         run: |
-          echo "${{ env.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
       - name: Configure SSH (optional but safer)
@@ -76,7 +76,7 @@ jobs:
         with:
           host: ${{ env.EC2_PUBLIC_IP }}
           username: ec2-user
-          key: ${{ env.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "image.tar"
           target: "/home/ec2-user/"
 

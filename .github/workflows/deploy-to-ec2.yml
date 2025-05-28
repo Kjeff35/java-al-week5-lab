@@ -1,0 +1,108 @@
+name: Build and Deploy to EC2
+
+on:
+  push:
+    branches: [ deploy ]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  EC2_KEY_PAIR_NAME: myKeyPair
+  STACK_NAME: my-app-stack
+  DOCKER_IMAGE: my-app
+  DOCKER_TAG: latest
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name ${{ env.STACK_NAME }} \
+            --template-file ./social_media_app/cloudformation.yml \
+            --parameter-overrides KeyPairName=${{ env.EC2_KEY_PAIR_NAME }} \
+            --capabilities CAPABILITY_IAM
+          
+          # Get EC2 instance public IP and export to GitHub environment
+          EC2_PUBLIC_IP=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
+            --output text)
+          echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+
+  build-and-deploy:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add EC2 host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ env.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
+
+      - name: Install SSH private key
+        run: |
+          echo "${{ env.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Configure SSH (optional but safer)
+        run: |
+          echo "Host *" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking yes" >> ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} ./social_media_app
+          docker save ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} > image.tar
+
+      - name: Copy Docker image to EC2
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ env.EC2_PUBLIC_IP }}
+          username: ec2-user
+          key: ${{ env.SSH_PRIVATE_KEY }}
+          source: "image.tar"
+          target: "/home/ec2-user/"
+
+      - name: Load and run Docker image on EC2
+        uses: appleboy/ssh-action@v1.0.7
+        with:
+          host: ${{ env.EC2_PUBLIC_IP }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Install Docker if not already installed
+            sudo yum update -y
+            sudo amazon-linux-extras install docker -y
+            sudo service docker start
+            sudo usermod -a -G docker ec2-user
+
+            # Load Docker image
+            docker load -i /home/ec2-user/image.tar
+
+            # Stop and remove existing container if running
+            docker stop ${{ env.DOCKER_IMAGE }} || true
+            docker rm ${{ env.DOCKER_IMAGE }} || true
+
+            # Run new container
+            docker run -d \
+              --name ${{ env.DOCKER_IMAGE }} \
+              -p 80:3000 \
+              --restart unless-stopped \
+              ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}

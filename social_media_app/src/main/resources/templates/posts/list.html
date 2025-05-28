@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Posts List</title>
+    <!-- Bootstrap 5 CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <h1 class="mb-4">Posts</h1>
+    <a href="/posts/new" class="btn btn-primary mb-3">Create New Post</a>
+    <ul class="list-group">
+        <li th:each="post : ${posts}" class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <b th:text="${post.title}"></b> by <i th:text="${post.author}"></i>
+            </div>
+            <div>
+                <a th:href="@{/posts/edit/{id}(id=${post.id})}" class="btn btn-sm btn-outline-secondary me-2">Edit</a>
+                <a th:href="@{/posts/delete/{id}(id=${post.id})}" class="btn btn-sm btn-outline-danger">Delete</a>
+            </div>
+        </li>
+    </ul>
+</div>
+
+<!-- Bootstrap 5 JS Bundle CDN (optional for dropdowns, modals etc) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

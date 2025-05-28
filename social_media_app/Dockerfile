@@ -1,5 +1,5 @@
 # Build Application
-FROM maven:3.9.6 As build
+FROM maven:3.9.6 AS build
 
 WORKDIR /app
 

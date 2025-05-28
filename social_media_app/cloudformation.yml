@@ -30,8 +30,9 @@ Resources:
           #!/bin/bash
           yum update -y
           amazon-linux-extras install docker -y
-          service docker start
-          usermod -a -G docker ec2-user
+          systemctl enable docker
+          systemctl start docker
+          usermod -aG docker ec2-user
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'

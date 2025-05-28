@@ -29,6 +29,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy CloudFormation stack
+        id: deploy
         run: |
           aws cloudformation deploy \
             --stack-name ${{ env.STACK_NAME }} \
@@ -40,7 +41,8 @@ jobs:
             --stack-name ${{ env.STACK_NAME }} \
             --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
             --output text)
-          echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+          echo "EC2_PUBLIC_IP=${EC2_PUBLIC_IP}" >> $GITHUB_ENV
+          echo "::set-output name=ec2_ip::${EC2_PUBLIC_IP}"
 
   build-and-deploy:
     needs: deploy-infrastructure
@@ -49,16 +51,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get EC2 IP
+        id: get-ip
+        run: |
+          echo "EC2_IP=${{ needs.deploy-infrastructure.outputs.ec2_ip }}" >> $GITHUB_ENV
+          echo "Using EC2 IP: ${{ needs.deploy-infrastructure.outputs.ec2_ip }}"
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ env.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ env.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
-          echo "Host ${{ env.EC2_PUBLIC_IP }}" >> ~/.ssh/config
-          echo "  User ec2-user" >> ~/.ssh/config
-          echo "  IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
-          echo "  StrictHostKeyChecking yes" >> ~/.ssh/config
+          cat << EOF >> ~/.ssh/config
+          Host ${{ env.EC2_PUBLIC_IP }}
+            User ec2-user
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking yes
+          EOF
 
       - name: Build Docker image
         run: |
@@ -66,15 +76,11 @@ jobs:
           docker save ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} > image.tar
 
       - name: Copy Docker image to EC2
-        run: |
-          scp -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile=~/.ssh/known_hosts \
-              image.tar ec2-user@${{ env.EC2_PUBLIC_IP }}:/home/ec2-user/image.tar
+        run: scp -i ~/.ssh/id_rsa image.tar ec2-user@${{ env.EC2_PUBLIC_IP }}:/home/ec2-user/
 
       - name: Deploy Docker image on EC2
         run: |
-          ssh -o StrictHostKeyChecking=yes \
-              ec2-user@${{ env.EC2_PUBLIC_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_PUBLIC_IP }} << 'EOF'
           sudo yum update -y
           sudo amazon-linux-extras install docker -y
           sudo service docker start

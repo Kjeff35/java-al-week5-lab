@@ -36,7 +36,6 @@ jobs:
             --parameter-overrides KeyPairName=${{ env.EC2_KEY_PAIR_NAME }} \
             --capabilities CAPABILITY_IAM
           
-          # Get EC2 instance public IP and export to GitHub environment
           EC2_PUBLIC_IP=$(aws cloudformation describe-stacks \
             --stack-name ${{ env.STACK_NAME }} \
             --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
@@ -50,21 +49,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Add EC2 host to known_hosts
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ env.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
-
-      - name: Install SSH private key
-        run: |
           echo "${{ env.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-      - name: Configure SSH (optional but safer)
-        run: |
-          echo "Host *" >> ~/.ssh/config
-          echo "  StrictHostKeyChecking yes" >> ~/.ssh/config
+          ssh-keyscan -H ${{ env.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
+          echo "Host ${{ env.EC2_PUBLIC_IP }}" >> ~/.ssh/config
+          echo "  User ec2-user" >> ~/.ssh/config
           echo "  IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking yes" >> ~/.ssh/config
 
       - name: Build Docker image
         run: |
@@ -72,37 +66,28 @@ jobs:
           docker save ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} > image.tar
 
       - name: Copy Docker image to EC2
-        uses: appleboy/scp-action@v0.1.6
-        with:
-          host: ${{ env.EC2_PUBLIC_IP }}
-          username: ec2-user
-          key: ${{ env.SSH_PRIVATE_KEY }}
-          source: "image.tar"
-          target: "/home/ec2-user/"
+        run: |
+          scp -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile=~/.ssh/known_hosts \
+              image.tar ec2-user@${{ env.EC2_PUBLIC_IP }}:/home/ec2-user/image.tar
 
-      - name: Load and run Docker image on EC2
-        uses: appleboy/ssh-action@v1.0.7
-        with:
-          host: ${{ env.EC2_PUBLIC_IP }}
-          username: ec2-user
-          key: ${{ env.SSH_PRIVATE_KEY }}
-          script: |
-            # Install Docker if not already installed
-            sudo yum update -y
-            sudo amazon-linux-extras install docker -y
-            sudo service docker start
-            sudo usermod -a -G docker ec2-user
-
-            # Load Docker image
-            docker load -i /home/ec2-user/image.tar
-
-            # Stop and remove existing container if running
-            docker stop ${{ env.DOCKER_IMAGE }} || true
-            docker rm ${{ env.DOCKER_IMAGE }} || true
-
-            # Run new container
-            docker run -d \
-              --name ${{ env.DOCKER_IMAGE }} \
-              -p 80:3000 \
-              --restart unless-stopped \
-              ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+      - name: Deploy Docker image on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=yes \
+              ec2-user@${{ env.EC2_PUBLIC_IP }} << 'EOF'
+          sudo yum update -y
+          sudo amazon-linux-extras install docker -y
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+          
+          docker load -i /home/ec2-user/image.tar
+          
+          docker stop ${{ env.DOCKER_IMAGE }} || true
+          docker rm ${{ env.DOCKER_IMAGE }} || true
+          
+          docker run -d \
+            --name ${{ env.DOCKER_IMAGE }} \
+            -p 80:3000 \
+            --restart unless-stopped \
+            ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+          EOF

@@ -36,13 +36,6 @@ jobs:
             --template-file ./social_media_app/cloudformation.yml \
             --parameter-overrides KeyPairName=${{ env.EC2_KEY_PAIR_NAME }} \
             --capabilities CAPABILITY_IAM
-          
-          EC2_PUBLIC_IP=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
-            --output text)
-          echo "EC2_PUBLIC_IP=${EC2_PUBLIC_IP}" >> $GITHUB_ENV
-          echo "::set-output name=ec2_ip::${EC2_PUBLIC_IP}"
 
   build-and-deploy:
     needs: deploy-infrastructure
@@ -51,11 +44,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get EC2 IP
+      - name: Get EC2 Public IP
         id: get-ip
         run: |
-          echo "EC2_IP=${{ needs.deploy-infrastructure.outputs.ec2_ip }}" >> $GITHUB_ENV
-          echo "Using EC2 IP: ${{ needs.deploy-infrastructure.outputs.ec2_ip }}"
+          EC2_PUBLIC_IP=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`PublicIP`].OutputValue' \
+            --output text)
+          echo "EC2_PUBLIC_IP=${EC2_PUBLIC_IP}" >> $GITHUB_ENV
 
       - name: Setup SSH
         run: |

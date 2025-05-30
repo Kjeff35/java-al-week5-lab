@@ -58,9 +58,6 @@ Resources:
           sudo systemctl enable docker
           sudo systemctl start docker
           
-          # Verify Docker installation
-          sudo docker run hello-world
-          
           echo "UserData script completed successfully"
 
   InstanceSecurityGroup:

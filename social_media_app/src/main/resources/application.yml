@@ -14,3 +14,5 @@ spring:
       hibernate:
         format_sql: true
     database: h2
+
+server.port: 80

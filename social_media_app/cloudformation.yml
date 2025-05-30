@@ -19,7 +19,7 @@ Resources:
   EC2Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
-      InstanceType: t3.micro
+      InstanceType: !Ref InstanceType
       ImageId: !Ref ImageId
       KeyName: !Ref KeyPairName
       SecurityGroupIds:
@@ -27,30 +27,41 @@ Resources:
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
         Fn::Base64: |
-          #!/bin/bash
-          # Add Docker's official GPG key:
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl
-          sudo install -m 0755 -d /etc/apt/keyrings
-          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          #!/bin/bash -xe
+          # Log all output to a file for debugging
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
           
-          # Add the repository to Apt sources:
+          echo "Starting UserData script execution"
+          
+          # Update system and install prerequisites
+          sudo apt-get update -y
+          sudo apt-get install -y ca-certificates curl gnupg lsb-release
+          
+          # Add Docker's official GPG key
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          sudo chmod a+r /etc/apt/keyrings/docker.gpg
+          
+          # Add Docker repository
           echo \
-          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get update
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+            $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           
           # Install Docker
-          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          sudo apt-get update -y
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
           
-          # Add current user to docker group
+          # Add ubuntu user to docker group
           sudo usermod -aG docker ubuntu
           
-          # Enable and start Docker service
+          # Enable and start Docker
           sudo systemctl enable docker
           sudo systemctl start docker
+          
+          # Verify Docker installation
+          sudo docker run hello-world
+          
+          echo "UserData script completed successfully"
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'

@@ -16,3 +16,13 @@ spring:
     database: h2
 
 server.port: 80
+
+# application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

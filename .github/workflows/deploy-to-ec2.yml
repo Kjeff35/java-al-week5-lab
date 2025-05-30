@@ -9,6 +9,7 @@ env:
   STACK_NAME: my-app-stack
   DOCKER_IMAGE: my-app
   DOCKER_TAG: latest
+  EC2_SSH_USER: ubuntu
 
 jobs:
   deploy-infrastructure:
@@ -65,7 +66,7 @@ jobs:
           cat << EOF >> ~/.ssh/config
           Host ec2
             HostName $EC2_PUBLIC_IP
-            User ec2-user
+            User ${{ env.EC2_SSH_USER }}
             IdentityFile ~/.ssh/id_rsa
             StrictHostKeyChecking no
           EOF
@@ -77,15 +78,15 @@ jobs:
 
       - name: Copy Docker image to EC2
         run: |
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa image.tar ec2-user@$EC2_PUBLIC_IP:/home/ec2-user/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa image.tar ${{ env.EC2_SSH_USER }}@$EC2_PUBLIC_IP:/home/${{ env.EC2_SSH_USER }}/
 
       - name: Deploy Docker image on EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ec2-user@$EC2_PUBLIC_IP << EOF
+          ssh -i ~/.ssh/id_rsa ${{ env.EC2_SSH_USER }}@$EC2_PUBLIC_IP << EOF
           IMAGE_NAME="${DOCKER_IMAGE}"
           IMAGE_TAG="${DOCKER_TAG}"
 
-          docker load -i /home/ec2-user/image.tar
+          docker load -i /home/${{ env.EC2_SSH_USER }}/image.tar
 
           docker stop \$IMAGE_NAME || true
           docker rm \$IMAGE_NAME || true

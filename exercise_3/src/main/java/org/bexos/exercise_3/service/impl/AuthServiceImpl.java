@@ -5,6 +5,7 @@ import org.bexos.exercise_3.dto.UserRegister;
 import org.bexos.exercise_3.model.User;
 import org.bexos.exercise_3.repository.UserRepository;
 import org.bexos.exercise_3.service.AuthService;
+import org.bexos.exercise_3.service.BankAccountService;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.Base64;
 public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final BankAccountService bankAccountService;
 
     public void registerUser(UserRegister register, Model model) throws Exception {
         if (!register.getPassword().equals(register.getConfirmPassword())){
@@ -35,8 +37,8 @@ public class AuthServiceImpl implements AuthService {
         User user = new User();
         user.setEmail(register.getEmail());
         user.setPassword(passwordEncoder.encode(register.getPassword()));
-        user.setEncryptedSecret(encryptedSecret);
         userRepository.save(user);
+        bankAccountService.createAccountForUser(user);
     }
 
     private String encryptWithBouncyCastle(String data) throws Exception {

@@ -11,10 +11,12 @@
 <form method="post" th:action="@{'/login'}">
     <label for="username">Username</label>
     <input id="username" type="email" name="username" required />
+    <br />
     <label for="password">Password</label>
     <input id="password" type="password" name="password" required />
-    <input type="hidden" name="_csrf" value="${_csrf.token}" />
+    <br />
     <button type="submit">Login</button>
+    <br />
     <a th:href="@{'/register'}">Register</a>
 </form>
 

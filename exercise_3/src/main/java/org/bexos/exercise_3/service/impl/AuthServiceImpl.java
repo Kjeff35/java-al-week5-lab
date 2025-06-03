@@ -2,7 +2,6 @@ package org.bexos.exercise_3.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.bexos.exercise_3.dto.UserRegister;
-import org.bexos.exercise_3.model.BankAccount;
 import org.bexos.exercise_3.model.User;
 import org.bexos.exercise_3.repository.UserRepository;
 import org.bexos.exercise_3.service.AuthService;
